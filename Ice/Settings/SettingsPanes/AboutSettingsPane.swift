@@ -17,7 +17,7 @@ struct AboutSettingsPane: View {
 
     private var contributeURL: URL {
         // swiftlint:disable:next force_unwrapping
-        URL(string: "https://github.com/jordanbaird/Ice")!
+        URL(string: "https://github.com/lxy1992/Ice")!
     }
 
     private var issuesURL: URL {
@@ -60,11 +60,13 @@ struct AboutSettingsPane: View {
             appIconAndCopyrightSection
                 .layoutPriority(1)
 
-            Spacer(minLength: 0)
-                .frame(maxHeight: 20)
+            if UpdatesManager.isEnabled {
+                Spacer(minLength: 0)
+                    .frame(maxHeight: 20)
 
-            updatesSection
-                .layoutPriority(1)
+                updatesSection
+                    .layoutPriority(1)
+            }
         }
         .padding(.top, 5)
         .padding([.horizontal, .bottom], 30)

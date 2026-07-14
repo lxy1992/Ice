@@ -7,15 +7,15 @@ Ice is a powerful menu bar management tool. While its primary function is hiding
 
 ![Banner](https://github.com/user-attachments/assets/4423085c-4e4b-4f3d-ad0f-90a217c03470)
 
-[![Download](https://img.shields.io/badge/download-latest-brightgreen?style=flat-square)](https://github.com/jordanbaird/Ice/releases/latest)
+[![Download](https://img.shields.io/badge/download-macOS%2026%20prerelease-brightgreen?style=flat-square)](https://github.com/lxy1992/Ice/releases/tag/0.11.13-macos26.1)
 ![Platform](https://img.shields.io/badge/platform-macOS-blue?style=flat-square)
 ![Requirements](https://img.shields.io/badge/requirements-macOS%2014%2B-fa4e49?style=flat-square)
 [![Sponsor](https://img.shields.io/badge/Sponsor%20%E2%9D%A4%EF%B8%8F-8A2BE2?style=flat-square)](https://github.com/sponsors/jordanbaird)
 [![Website](https://img.shields.io/badge/Website-015FBA?style=flat-square)](https://icemenubar.app)
-[![License](https://img.shields.io/github/license/jordanbaird/Ice?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/github/license/lxy1992/Ice?style=flat-square)](LICENSE)
 
 > [!NOTE]
-> Ice is currently in active development. Some features have not yet been implemented. Download the latest release [here](https://github.com/jordanbaird/Ice/releases/latest) and see the roadmap below for upcoming features.
+> This fork includes macOS 26 compatibility work and is currently distributed as a prerelease. Download `0.11.13-macos26.1` [here](https://github.com/lxy1992/Ice/releases/tag/0.11.13-macos26.1). Automatic updates remain disabled until this fork has its own signed update feed.
 
 <a href="https://www.buymeacoffee.com/jordanbaird" target="_blank">
     <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;">
@@ -25,11 +25,11 @@ Ice is a powerful menu bar management tool. While its primary function is hiding
 
 ### Manual Installation
 
-Download the "Ice.zip" file from the [latest release](https://github.com/jordanbaird/Ice/releases/latest) and move the unzipped app into your `Applications` folder.
+Download the "Ice.zip" file from the [`0.11.13-macos26.1` prerelease](https://github.com/lxy1992/Ice/releases/tag/0.11.13-macos26.1) and move the unzipped app into your `Applications` folder.
 
 ### Homebrew
 
-Install Ice using the following command:
+The following cask installs the upstream official build, not this macOS 26 fork:
 
 ```sh
 brew install --cask jordanbaird-ice
@@ -78,7 +78,7 @@ brew install --cask jordanbaird-ice
 ### Other
 
 - [x] Launch at login
-- [x] Automatic updates
+- [ ] Automatic updates (disabled until this fork has its own signed update feed)
 - [ ] Menu bar widgets
 
 ## Why does Ice only support macOS 14 and later?
