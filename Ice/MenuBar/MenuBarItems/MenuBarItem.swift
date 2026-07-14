@@ -335,7 +335,7 @@ private extension MenuBarItemTag.Namespace {
     private static let iceControlItemTitles: Set<String> = [
         "Ice.ControlItem.Visible",
         "Ice.ControlItem.Hidden",
-        "Ice.ControlItem.AlwaysHidden"
+        "Ice.ControlItem.AlwaysHidden",
     ]
 
     /// Stable fallback identifiers for windows whose source process is unknown.
