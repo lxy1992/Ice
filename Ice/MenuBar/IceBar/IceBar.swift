@@ -10,6 +10,12 @@ import SwiftUI
 // MARK: - IceBarPanel
 
 final class IceBarPanel: NSPanel {
+    /// A token that identifies one request to present the Ice Bar.
+    struct PresentationRequest {
+        fileprivate let section: MenuBarSection.Name
+        fileprivate let generation: UInt
+    }
+
     /// The shared app state.
     private weak var appState: AppState?
 
@@ -18,6 +24,12 @@ final class IceBarPanel: NSPanel {
 
     /// The currently displayed section.
     private(set) var currentSection: MenuBarSection.Name?
+
+    /// Identifies the most recent show/close request.
+    ///
+    /// Cache updates in `show` suspend. Without an ownership token, an older
+    /// show request can finish after `close` and reopen the panel.
+    private var presentationGeneration: UInt = 0
 
     /// Storage for internal observers.
     private var cancellables = Set<AnyCancellable>()
@@ -156,17 +168,39 @@ final class IceBarPanel: NSPanel {
         setFrameOrigin(getOrigin(for: appState.settings.general.iceBarLocation))
     }
 
-    /// Shows the panel on the given screen, displaying the given
-    /// menu bar section.
-    func show(section: MenuBarSection.Name, on screen: NSScreen) async {
+    /// Synchronously claims ownership of the next panel presentation.
+    ///
+    /// This must happen before scheduling the asynchronous cache work so a
+    /// subsequent `close` can invalidate the request even if its task has not
+    /// started yet.
+    func beginPresentation(for section: MenuBarSection.Name) -> PresentationRequest? {
         guard let appState else {
-            return
+            return nil
         }
+
+        presentationGeneration &+= 1
+        let request = PresentationRequest(section: section, generation: presentationGeneration)
 
         // IMPORTANT: We must set the navigation state and current section
         // before updating the caches.
         appState.navigationState.isIceBarPresented = true
         currentSection = section
+
+        return request
+    }
+
+    /// Shows the panel on the given screen for a previously claimed
+    /// presentation request.
+    @discardableResult
+    func show(_ request: PresentationRequest, on screen: NSScreen) async -> Bool {
+        guard
+            let appState,
+            request.generation == presentationGeneration,
+            currentSection == request.section,
+            appState.navigationState.isIceBarPresented
+        else {
+            return false
+        }
 
         let cacheTask = Task(timeout: .seconds(1)) {
             await appState.itemManager.cacheItemsIfNeeded()
@@ -179,11 +213,20 @@ final class IceBarPanel: NSPanel {
             Logger.default.error("Cache update failed when showing IceBarPanel - \(error)")
         }
 
+        guard
+            !Task.isCancelled,
+            request.generation == presentationGeneration,
+            currentSection == request.section,
+            appState.navigationState.isIceBarPresented
+        else {
+            return false
+        }
+
         contentView = IceBarHostingView(
             appState: appState,
             colorManager: colorManager,
             screen: screen,
-            section: section
+            section: request.section
         )
 
         updateOrigin(for: screen)
@@ -197,6 +240,7 @@ final class IceBarPanel: NSPanel {
         colorManager.updateAllProperties(with: frame, screen: screen)
 
         orderFrontRegardless()
+        return true
     }
 
     /// Hides the panel.
@@ -211,6 +255,7 @@ final class IceBarPanel: NSPanel {
     }
 
     override func close() {
+        presentationGeneration &+= 1
         super.close()
         contentView = nil
         currentSection = nil

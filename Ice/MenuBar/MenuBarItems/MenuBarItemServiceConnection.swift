@@ -97,12 +97,11 @@ extension MenuBarItemService {
                 if let session {
                     return session
                 }
-                let session = try XPCSession(xpcService: name, options: .inactive) { [weak self] error in
-                    guard let self else {
-                        return
-                    }
+                // The cancellation callback runs on the session's target queue,
+                // outside the lock that protects this storage. Mutating the
+                // stored session here races with an in-flight `sendSync`.
+                let session = try XPCSession(xpcService: name, options: .inactive) { [logger] error in
                     logger.warning("Session was cancelled with error \(error.localizedDescription)")
-                    self.session = nil
                 }
                 session.setPeerRequirement(.isFromSameTeam())
                 session.setTargetQueue(queue)
@@ -125,6 +124,9 @@ extension MenuBarItemService {
                     return try reply.decode(as: Response.self)
                 } catch {
                     logger.error("Session failed with error \(error)")
+                    if let deadSession = session.take() {
+                        deadSession.cancel(reason: "Send failed: \(error.localizedDescription)")
+                    }
                     return nil
                 }
             }

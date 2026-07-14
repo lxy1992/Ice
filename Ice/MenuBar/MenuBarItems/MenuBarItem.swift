@@ -4,6 +4,7 @@
 //
 
 import Cocoa
+import os.lock
 
 /// A structural representation of a menu bar item.
 struct MenuBarItem: CustomStringConvertible {
@@ -330,7 +331,18 @@ private extension MenuBarItemTag {
 // MARK: - MenuBarItemTag.Namespace Helper
 
 private extension MenuBarItemTag.Namespace {
-    private static var uuidCache = [CGWindowID: UUID]()
+    /// Exact window titles assigned to Ice's three control items.
+    private static let iceControlItemTitles: Set<String> = [
+        "Ice.ControlItem.Visible",
+        "Ice.ControlItem.Hidden",
+        "Ice.ControlItem.AlwaysHidden"
+    ]
+
+    /// Stable fallback identifiers for windows whose source process is unknown.
+    ///
+    /// Menu bar item discovery performs concurrent XPC lookups on macOS 26, so
+    /// this shared cache must not be accessed as an unprotected dictionary.
+    private static let uuidCache = OSAllocatedUnfairLock(initialState: [CGWindowID: UUID]())
 
     /// Creates a namespace without checks.
     ///
@@ -363,11 +375,23 @@ private extension MenuBarItemTag.Namespace {
         // which are more likely not to have a bundle ID.
         if let sourcePID, let app = NSRunningApplication(processIdentifier: sourcePID) {
             self = .optional(app.bundleIdentifier ?? app.localizedName)
-        } else if let uuid = Self.uuidCache[itemWindow.windowID] {
-            self = .uuid(uuid)
+        } else if
+            let title = itemWindow.title,
+            Self.iceControlItemTitles.contains(title)
+        {
+            // macOS 26 reparents status item windows to Control Center. Ice's
+            // own LSUIElement process may then be absent from AXExtrasMenuBar,
+            // while the exact autosave title remains intact.
+            self = .ice
         } else {
-            let uuid = UUID()
-            Self.uuidCache[itemWindow.windowID] = uuid
+            let uuid = Self.uuidCache.withLock { cache in
+                if let uuid = cache[itemWindow.windowID] {
+                    return uuid
+                }
+                let uuid = UUID()
+                cache[itemWindow.windowID] = uuid
+                return uuid
+            }
             self = .uuid(uuid)
         }
     }

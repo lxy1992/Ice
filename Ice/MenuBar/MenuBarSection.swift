@@ -175,14 +175,23 @@ final class MenuBarSection {
             }
 
             if let screen = screenForIceBar {
+                let panel = menuBarManager.iceBarPanel
+                let section: Name = switch name {
+                case .visible, .hidden:
+                    .hidden
+                case .alwaysHidden:
+                    .alwaysHidden
+                }
+
+                guard let presentation = panel.beginPresentation(for: section) else {
+                    return
+                }
+
                 Task {
-                    switch name {
-                    case .visible, .hidden:
-                        await menuBarManager.iceBarPanel.show(section: .hidden, on: screen)
-                    case .alwaysHidden:
-                        await menuBarManager.iceBarPanel.show(section: .alwaysHidden, on: screen)
+                    let didShow = await panel.show(presentation, on: screen)
+                    if didShow {
+                        startRehideChecks()
                     }
-                    startRehideChecks()
                 }
             }
 

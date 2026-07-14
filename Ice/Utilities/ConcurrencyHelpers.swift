@@ -110,3 +110,194 @@ extension Task where Failure == any Error {
         }
     }
 }
+
+// MARK: - One-Shot Operations
+
+/// Coordinates a resource-backed async operation that can either finish or
+/// be cancelled exactly once.
+///
+/// The resource is started only while the operation is pending. Whichever of
+/// ``finish()`` and ``cancel()`` wins stops the resource before resuming the
+/// suspended waiter. This also handles cancellation racing with `start(with:)`.
+final class OneShotOperation<Resource>: @unchecked Sendable {
+    private enum Outcome: Sendable {
+        case finished
+        case cancelled
+    }
+
+    private enum Phase: Equatable, Sendable {
+        case idle
+        case starting
+        case started
+        case stopped
+    }
+
+    private struct ResourceBox: @unchecked Sendable {
+        let value: Resource
+    }
+
+    private struct Delivery: Sendable {
+        let continuation: CheckedContinuation<Void, any Error>
+        let outcome: Outcome
+    }
+
+    private struct Finalization: Sendable {
+        var resource: ResourceBox? = nil
+        var delivery: Delivery? = nil
+    }
+
+    private struct State: Sendable {
+        var phase = Phase.idle
+        var resource: ResourceBox?
+        var outcome: Outcome?
+        var continuation: CheckedContinuation<Void, any Error>?
+        var hasWaiter = false
+    }
+
+    private let state = OSAllocatedUnfairLock(initialState: State())
+    private let startResource: (Resource) -> Void
+    private let stopResource: (Resource) -> Void
+
+    /// Creates an operation with actions that start and stop its resource.
+    init(
+        start: @escaping (Resource) -> Void,
+        stop: @escaping (Resource) -> Void
+    ) {
+        self.startResource = start
+        self.stopResource = stop
+    }
+
+    /// Starts the resource if neither completion nor cancellation has won.
+    @discardableResult
+    func start(with resource: Resource) -> Bool {
+        let resourceBox = ResourceBox(value: resource)
+        let shouldStart = state.withLock { state in
+            guard state.phase == .idle, state.outcome == nil else {
+                return false
+            }
+            state.phase = .starting
+            state.resource = resourceBox
+            return true
+        }
+        guard shouldStart else {
+            return false
+        }
+
+        startResource(resource)
+
+        let finalization = state.withLock { state -> Finalization in
+            precondition(state.phase == .starting)
+            if let outcome = state.outcome {
+                state.phase = .stopped
+                let resource = state.resource
+                state.resource = nil
+                if let continuation = state.continuation {
+                    state.continuation = nil
+                    return Finalization(
+                        resource: resource,
+                        delivery: Delivery(continuation: continuation, outcome: outcome)
+                    )
+                }
+                return Finalization(resource: resource)
+            } else {
+                state.phase = .started
+                return Finalization()
+            }
+        }
+        perform(finalization)
+        return true
+    }
+
+    /// Suspends until the operation finishes or is cancelled.
+    ///
+    /// An operation supports exactly one waiter.
+    func wait() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            let immediateOutcome = state.withLock { state -> Outcome? in
+                precondition(!state.hasWaiter, "OneShotOperation only supports one waiter")
+                state.hasWaiter = true
+                if let outcome = state.outcome, state.phase != .starting {
+                    return outcome
+                } else {
+                    state.continuation = continuation
+                    return nil
+                }
+            }
+            if let immediateOutcome {
+                resume(continuation, with: immediateOutcome)
+            }
+        }
+    }
+
+    /// Finishes the operation. Returns `true` only for the winning caller.
+    @discardableResult
+    func finish() -> Bool {
+        resolve(with: .finished)
+    }
+
+    /// Cancels the operation. Returns `true` only for the winning caller.
+    @discardableResult
+    func cancel() -> Bool {
+        resolve(with: .cancelled)
+    }
+
+    private func resolve(with outcome: Outcome) -> Bool {
+        let finalization = state.withLock { state -> Finalization? in
+            guard state.outcome == nil else {
+                return nil
+            }
+            state.outcome = outcome
+
+            var resource: ResourceBox?
+            switch state.phase {
+            case .idle:
+                state.phase = .stopped
+            case .starting:
+                // `start(with:)` performs cleanup after `startResource`
+                // returns, then delivers the outcome to any waiter.
+                return Finalization()
+            case .started:
+                state.phase = .stopped
+                resource = state.resource
+                state.resource = nil
+            case .stopped:
+                preconditionFailure("Unresolved operation cannot already be stopped")
+            }
+
+            if let storedContinuation = state.continuation {
+                state.continuation = nil
+                return Finalization(
+                    resource: resource,
+                    delivery: Delivery(continuation: storedContinuation, outcome: outcome)
+                )
+            }
+            return Finalization(resource: resource)
+        }
+        guard let finalization else {
+            return false
+        }
+        perform(finalization)
+        return true
+    }
+
+    private func perform(_ finalization: Finalization) {
+        if let resource = finalization.resource {
+            stopResource(resource.value)
+        }
+        if let delivery = finalization.delivery {
+            resume(delivery.continuation, with: delivery.outcome)
+        }
+    }
+
+    private func resume(
+        _ continuation: CheckedContinuation<Void, any Error>,
+        with outcome: Outcome
+    ) {
+        switch outcome {
+        case .finished:
+            continuation.resume()
+        case .cancelled:
+            continuation.resume(throwing: CancellationError())
+        }
+    }
+}
