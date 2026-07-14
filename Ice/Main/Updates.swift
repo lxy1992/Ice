@@ -9,6 +9,11 @@ import SwiftUI
 /// Manager for app updates.
 @MainActor
 final class UpdatesManager: NSObject, ObservableObject {
+    /// Whether this distribution has a trusted, independently owned update feed.
+    ///
+    /// Keep disabled until the fork publishes its own appcast and signing key.
+    static let isEnabled = false
+
     /// A Boolean value that indicates whether the user can check for updates.
     @Published var canCheckForUpdates = false
 
@@ -19,23 +24,29 @@ final class UpdatesManager: NSObject, ObservableObject {
     private(set) weak var appState: AppState?
 
     /// The underlying updater controller.
-    private(set) lazy var updaterController = SPUStandardUpdaterController(
+    private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: self,
         userDriverDelegate: self
     )
 
     /// The underlying updater.
-    var updater: SPUUpdater {
+    private var updater: SPUUpdater {
         updaterController.updater
     }
 
     /// A Boolean value that indicates whether to automatically check for updates.
     var automaticallyChecksForUpdates: Bool {
         get {
-            updater.automaticallyChecksForUpdates
+            guard Self.isEnabled else {
+                return false
+            }
+            return updater.automaticallyChecksForUpdates
         }
         set {
+            guard Self.isEnabled else {
+                return
+            }
             objectWillChange.send()
             updater.automaticallyChecksForUpdates = newValue
         }
@@ -44,9 +55,15 @@ final class UpdatesManager: NSObject, ObservableObject {
     /// A Boolean value that indicates whether to automatically download updates.
     var automaticallyDownloadsUpdates: Bool {
         get {
-            updater.automaticallyDownloadsUpdates
+            guard Self.isEnabled else {
+                return false
+            }
+            return updater.automaticallyDownloadsUpdates
         }
         set {
+            guard Self.isEnabled else {
+                return
+            }
             objectWillChange.send()
             updater.automaticallyDownloadsUpdates = newValue
         }
@@ -54,6 +71,9 @@ final class UpdatesManager: NSObject, ObservableObject {
 
     /// Performs the initial setup of the manager.
     func performSetup(with appState: AppState) {
+        guard Self.isEnabled else {
+            return
+        }
         self.appState = appState
         _ = updaterController
         configureCancellables()
@@ -69,6 +89,9 @@ final class UpdatesManager: NSObject, ObservableObject {
 
     /// Checks for app updates.
     @objc func checkForUpdates() {
+        guard Self.isEnabled else {
+            return
+        }
         #if DEBUG
         // Checking for updates hangs in debug mode.
         let alert = NSAlert()

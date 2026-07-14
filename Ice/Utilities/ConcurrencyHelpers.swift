@@ -142,8 +142,8 @@ final class OneShotOperation<Resource>: @unchecked Sendable {
     }
 
     private struct Finalization: Sendable {
-        var resource: ResourceBox? = nil
-        var delivery: Delivery? = nil
+        var resource: ResourceBox?
+        var delivery: Delivery?
     }
 
     private struct State: Sendable {
