@@ -109,7 +109,7 @@ final class MenuBarItemImageCache: ObservableObject {
 
     /// Captures a composite image of the given items, then crops out an image
     /// for each item and returns the result.
-    private nonisolated func compositeCapture(_ items: [MenuBarItem], scale: CGFloat) -> CaptureResult {
+    private nonisolated func compositeCapture(_ items: [MenuBarItem]) -> CaptureResult {
         var result = CaptureResult()
 
         var windowIDs = [CGWindowID]()
@@ -132,7 +132,10 @@ final class MenuBarItemImageCache: ObservableObject {
 
         guard
             let compositeImage = ScreenCapture.captureWindows(with: windowIDs, option: captureOption),
-            CGFloat(compositeImage.width) == boundsUnion.width * scale, // Safety check.
+            let scale = MenuBarImageScaleResolver.captureScale(
+                pixelSize: CGSize(width: compositeImage.width, height: compositeImage.height),
+                logicalSize: boundsUnion.size
+            ),
             !compositeImage.isTransparent()
         else {
             result.excluded = items // Exclude all items.
@@ -168,12 +171,17 @@ final class MenuBarItemImageCache: ObservableObject {
 
     /// Captures an image of each of the given items individually, then
     /// returns the result.
-    private nonisolated func individualCapture(_ items: [MenuBarItem], scale: CGFloat) -> CaptureResult {
+    private nonisolated func individualCapture(_ items: [MenuBarItem]) -> CaptureResult {
         var result = CaptureResult()
 
         for item in items {
             guard
+                let bounds = Bridging.getWindowBounds(for: item.windowID),
                 let image = ScreenCapture.captureWindow(with: item.windowID, option: captureOption),
+                let scale = MenuBarImageScaleResolver.captureScale(
+                    pixelSize: CGSize(width: image.width, height: image.height),
+                    logicalSize: bounds.size
+                ),
                 !image.isTransparent()
             else {
                 result.excluded.append(item)
@@ -186,15 +194,15 @@ final class MenuBarItemImageCache: ObservableObject {
     }
 
     /// Captures the images of the given menu bar items and returns the result.
-    private nonisolated func captureImages(of items: [MenuBarItem], scale: CGFloat, appState: AppState) async -> CaptureResult {
+    private nonisolated func captureImages(of items: [MenuBarItem], appState: AppState) async -> CaptureResult {
         // Use individual capture after a move operation, since composite capture
         // doesn't account for overlapping items.
         if await appState.itemManager.lastMoveOperationOccurred(within: .seconds(2)) {
             logger.debug("Capturing individually due to recent item movement")
-            return individualCapture(items, scale: scale)
+            return individualCapture(items)
         }
 
-        let compositeResult = compositeCapture(items, scale: scale)
+        let compositeResult = compositeCapture(items)
 
         if compositeResult.excluded.isEmpty {
             return compositeResult // All items captured successfully.
@@ -207,7 +215,7 @@ final class MenuBarItemImageCache: ObservableObject {
             """
         )
 
-        var individualResult = individualCapture(compositeResult.excluded, scale: scale)
+        var individualResult = individualCapture(compositeResult.excluded)
 
         // Merge the successfully captured images from each result. Keep excluded
         // items as part of the result, so they can be logged elsewhere.
@@ -235,7 +243,6 @@ final class MenuBarItemImageCache: ObservableObject {
             return
         }
 
-        let scale = screen.backingScaleFactor
         var newImages = [MenuBarItemTag: CapturedImage]()
 
         for section in sections {
@@ -244,7 +251,7 @@ final class MenuBarItemImageCache: ObservableObject {
                 continue
             }
 
-            let captureResult = await captureImages(of: items, scale: scale, appState: appState)
+            let captureResult = await captureImages(of: items, appState: appState)
             if !captureResult.excluded.isEmpty {
                 logger.error("Some items failed capture: \(captureResult.excluded, privacy: .public)")
             }
