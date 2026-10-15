@@ -128,8 +128,8 @@ require_count "$PROJECT" 'ENABLE_HARDENED_RUNTIME = YES;' 4 \
 
 require_count "$PROJECT" 'MARKETING_VERSION = 0.11.13;' 4 \
     'app and XPC marketing version is numeric 0.11.13 in Debug and Release'
-require_count "$PROJECT" 'CURRENT_PROJECT_VERSION = 1125;' 4 \
-    'app and XPC build number is 1125 in Debug and Release'
+require_count "$PROJECT" 'CURRENT_PROJECT_VERSION = 1126;' 4 \
+    'app and XPC build number is 1126 in Debug and Release'
 require_count "$PROJECT" 'PRODUCT_BUNDLE_IDENTIFIER = com.lxy1992.Ice;' 2 \
     'app bundle ID is independent in Debug and Release'
 require_count "$PROJECT" 'PRODUCT_BUNDLE_IDENTIFIER = com.lxy1992.Ice.MenuBarItemService;' 2 \
@@ -196,7 +196,7 @@ require_literal "$CONTROL_ITEM" 'if UpdatesManager.isEnabled {' \
 require_literal "$ABOUT" 'if UpdatesManager.isEnabled {' \
     'About update controls are hidden when updates are disabled'
 
-require_count "$README" 'https://github.com/lxy1992/Ice/releases/tag/0.11.13-macos26.4' 3 \
+require_count "$README" 'https://github.com/lxy1992/Ice/releases/tag/0.11.13-macos26.5' 3 \
     'README download links target the published prerelease tag'
 forbid_literal "$README" 'https://github.com/lxy1992/Ice/releases/latest' \
     'README does not use latest for a GitHub prerelease'
